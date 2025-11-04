@@ -10,5 +10,5 @@ async def handle_mentions(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT, handle_mentions))
-
+#first commit
 app.run_polling()
