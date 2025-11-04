@@ -1,8 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from .utils import create_category, add_user_to_category, load_categories, save_categories
-
-
+from .utils import create_category, add_user_to_category, load_categories, save_categories, remove_user_from_category
+import re
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra informazioni sul bot e sui comandi disponibili"""
@@ -14,7 +13,9 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📜 *Comandi principali:*\n\n"
         "• `/creacategoria <nome>` — Crea una nuova categoria.\n\n"
         "• `/iscrivi <nome_categoria>` — Ti iscrive a una categoria.\n\n"
+        "• `/disiscrivi <nome_categoria>` — Ti disiscrive da una categoria.\n\n"
         "• `/aggiungi <nome_categoria> <@utente>` — (solo admin) aggiunge un utente a una categoria.\n\n"
+        "• `/rimuovi <nome_categoria> <@utente>` — (solo admin) rimuove un utente da una categoria.\n\n"
         "• `/listacategorie` — Mostra tutte le categorie e i relativi iscritti.\n\n"
         "• `/eliminacategoria <nome_categoria>` — (solo admin) elimina una categoria, con conferma.\n\n"
         "💬 *Come funziona:*\n"
@@ -220,3 +221,58 @@ async def handle_delete_callback(update: Update, context: ContextTypes.DEFAULT_T
             return
 
         await query.edit_message_text("❌ Eliminazione annullata.")
+
+
+# 1️⃣ /disiscrivi
+async def leave_category_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 1:
+        await update.message.reply_text("Uso: /disiscrivi <nome_categoria>")
+        return
+
+    category = context.args[0].lower()
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    success, msg = remove_user_from_category(chat_id, category, user_id)
+    await update.message.reply_text(msg)
+
+
+# 2️⃣ /rimuovi (solo admin)
+async def remove_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    user = update.effective_user
+
+    # 🔒 Controllo permessi admin
+    member = await chat.get_member(user.id)
+    if member.status not in ["administrator", "creator"]:
+        await update.message.reply_text("Solo gli admin possono usare questo comando.")
+        return
+
+    # ✅ Controllo argomenti
+    if len(context.args) < 2:
+        await update.message.reply_text("Uso corretto: /rimuovi <categoria> @utente")
+        return
+
+    category = context.args[0].lower()
+    username = context.args[1].lstrip("@")
+
+    # 🔍 Prova a recuperare l'utente nel gruppo
+    try:
+        target_member = await context.bot.get_chat_member(chat.id, username)
+        target_id = target_member.user.id
+    except Exception:
+        # fallback: scansiona i membri noti nel gruppo
+        try:
+            all_members = await context.bot.get_chat_administrators(chat.id)
+            target_member = next((m for m in all_members if m.user.username and m.user.username.lower() == username.lower()), None)
+            target_id = target_member.user.id if target_member else None
+        except Exception:
+            target_id = None
+
+    if not target_id:
+        await update.message.reply_text(f"Utente @{username} non trovato nel gruppo.")
+        return
+
+    # 🧹 Rimozione
+    success, msg = remove_user_from_category(chat.id, category, target_id)
+    await update.message.reply_text(msg)

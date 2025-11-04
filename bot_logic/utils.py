@@ -41,3 +41,13 @@ def get_category_members(chat_id, category):
     if category not in cats:
         return []
     return cats[category]["members"]
+
+def remove_user_from_category(chat_id, category, user_id):
+    cats = load_categories(chat_id)
+    if category not in cats:
+        return False, "Categoria inesistente."
+    if user_id not in cats[category]["members"]:
+        return False, "Utente non iscritto a questa categoria."
+    cats[category]["members"].remove(user_id)
+    save_categories(chat_id, cats)
+    return True, "Utente rimosso con successo."

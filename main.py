@@ -1,7 +1,8 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, CommandHandler, CallbackQueryHandler
 from bot_logic.commands import create_category_command, join_category_command, list_categories_command, \
-    add_user_command, delete_category_command, handle_delete_callback, info_command
+    add_user_command, delete_category_command, handle_delete_callback, info_command, leave_category_command, \
+    remove_user_command
 from bot_logic.handlers import mention_handler
 
 TOKEN = "8561051025:AAHDeO3pw4-0ek25LCUnlXYM2-LKLtH96Ms"
@@ -23,6 +24,8 @@ def main():
     app.add_handler(CommandHandler("listacategorie",list_categories_command ))
     app.add_handler(CommandHandler("aggiungi", add_user_command ))
     app.add_handler(CommandHandler("eliminacategoria", delete_category_command))
+    app.add_handler(CommandHandler("disiscrivi", leave_category_command))
+    app.add_handler(CommandHandler("rimuovi", remove_user_command))
     app.add_handler(CallbackQueryHandler(handle_delete_callback, pattern="^(confirm_delete|cancel_delete)"))
 
 
