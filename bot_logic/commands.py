@@ -145,37 +145,22 @@ async def add_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⚠️ Utente già presente o categoria inesistente.")
 
 
+# esempio: struttura temporanea globale
+pending_deletions = {}
+
 async def delete_category_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /eliminacategoria <categoria>: chiede conferma con pulsanti"""
-    chat_id = update.effective_chat.id
+    chat_id = str(update.effective_chat.id)
     user_id = update.effective_user.id
-
-    # verifica permessi admin
-    try:
-        member = await context.bot.get_chat_member(chat_id, user_id)
-        if member.status not in ["administrator", "creator"]:
-            await update.message.reply_text("❌ Solo un admin può eliminare categorie.")
-            return
-    except Exception:
-        await update.message.reply_text("Errore nel verificare i permessi.")
-        return
-
-    if len(context.args) < 1:
-        await update.message.reply_text("Uso: /eliminacategoria <nome_categoria>")
-        return
-
     category = context.args[0].lower()
-    cats = load_categories(chat_id)
 
-    if category not in cats:
-        await update.message.reply_text(f"⚠️ La categoria '{category}' non esiste.")
-        return
+    # salva la richiesta in memoria
+    key = f"{chat_id}_{user_id}"
+    pending_deletions[key] = category
 
-    # Crea tastiera inline con conferma/annulla
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Conferma", callback_data=f"confirm_delete|{chat_id}|{category}|{user_id}"),
-            InlineKeyboardButton("❌ Annulla", callback_data=f"cancel_delete|{user_id}")
+            InlineKeyboardButton("✅ Conferma", callback_data=f"confirm_delete|{key}"),
+            InlineKeyboardButton("❌ Annulla", callback_data=f"cancel_delete|{key}")
         ]
     ])
 
@@ -184,43 +169,34 @@ async def delete_category_command(update: Update, context: ContextTypes.DEFAULT_
         reply_markup=keyboard
     )
 
-
 async def handle_delete_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestisce la conferma o l'annullamento dell'eliminazione"""
     query = update.callback_query
-    await query.answer()  # necessario per chiudere il "caricamento"
+    await query.answer()
 
-    data = query.data.split("|")
-    action = data[0]
+    action, key = query.data.split("|")
+    chat_id, requested_by = key.split("_")
+
+    if query.from_user.id != int(requested_by):
+        await query.edit_message_text("❌ Solo chi ha richiesto l'eliminazione può confermarla.")
+        return
+
+    category = pending_deletions.get(key)
+    if not category:
+        await query.edit_message_text("⚠️ Operazione scaduta o non trovata.")
+        return
 
     if action == "confirm_delete":
-        _, chat_id, category, requested_by = data
-        chat_id = int(chat_id)
-        requested_by = int(requested_by)
-
-        # verifica che chi clicca sia lo stesso admin
-        if query.from_user.id != requested_by:
-            await query.edit_message_text("❌ Solo chi ha richiesto l'eliminazione può confermarla.")
-            return
-
         cats = load_categories(chat_id)
-        if category not in cats:
-            await query.edit_message_text(f"⚠️ La categoria '{category}' non esiste più.")
-            return
-
-        del cats[category]
-        save_categories(chat_id, cats)
-        await query.edit_message_text(f"✅ Categoria '{category}' eliminata con successo.")
-
-    elif action == "cancel_delete":
-        _, requested_by = data
-        requested_by = int(requested_by)
-
-        if query.from_user.id != requested_by:
-            await query.edit_message_text("❌ Solo chi ha richiesto l'eliminazione può annullare.")
-            return
-
+        if category in cats:
+            del cats[category]
+            save_categories(chat_id, cats)
+            await query.edit_message_text(f"✅ Categoria '{category}' eliminata.")
+        else:
+            await query.edit_message_text(f"⚠️ La categoria '{category}' non esiste.")
+    else:
         await query.edit_message_text("❌ Eliminazione annullata.")
+
+    del pending_deletions[key]
 
 
 # 1️⃣ /disiscrivi
